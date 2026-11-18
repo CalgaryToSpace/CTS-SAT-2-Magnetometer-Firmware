@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -57,36 +57,28 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define B1_Pin GPIO_PIN_13
-#define B1_GPIO_Port GPIOC
-#define LD3_Pin GPIO_PIN_14
-#define LD3_GPIO_Port GPIOB
-#define STLK_RX_Pin GPIO_PIN_8
-#define STLK_RX_GPIO_Port GPIOD
-#define STLK_TX_Pin GPIO_PIN_9
-#define STLK_TX_GPIO_Port GPIOD
-#define USB_PowerSwitchOn_Pin GPIO_PIN_6
-#define USB_PowerSwitchOn_GPIO_Port GPIOG
-#define USB_SOF_Pin GPIO_PIN_8
-#define USB_SOF_GPIO_Port GPIOA
-#define USB_VBUS_Pin GPIO_PIN_9
-#define USB_VBUS_GPIO_Port GPIOA
-#define USB_ID_Pin GPIO_PIN_10
-#define USB_ID_GPIO_Port GPIOA
-#define USB_DM_Pin GPIO_PIN_11
-#define USB_DM_GPIO_Port GPIOA
-#define USB_DP_Pin GPIO_PIN_12
-#define USB_DP_GPIO_Port GPIOA
-#define TMS_Pin GPIO_PIN_13
-#define TMS_GPIO_Port GPIOA
-#define TCK_Pin GPIO_PIN_14
-#define TCK_GPIO_Port GPIOA
-#define SWO_Pin GPIO_PIN_3
-#define SWO_GPIO_Port GPIOB
-#define LD2_Pin GPIO_PIN_7
-#define LD2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define LD2_Pin                     GPIO_PIN_7
+#define LD2_GPIO_Port               GPIOB
+
+#define LD3_Pin                     GPIO_PIN_14
+#define LD3_GPIO_Port               GPIOB
+
+#define B1_Pin                      GPIO_PIN_13
+#define B1_GPIO_Port                GPIOC
+
+#define USB_PowerSwitchOn_Pin       GPIO_PIN_6
+#define USB_PowerSwitchOn_GPIO_Port  GPIOG
+
+/* ST-LINK serial connection:
+   PD8 = MCU USART3_TX -> ST-LINK RX
+   PD9 = MCU USART3_RX <- ST-LINK TX */
+#define STLK_RX_Pin        GPIO_PIN_8
+#define STLK_RX_GPIO_Port  GPIOD
+
+#define STLK_TX_Pin        GPIO_PIN_9
+#define STLK_TX_GPIO_Port  GPIOD
 
 /* USER CODE END Private defines */
 

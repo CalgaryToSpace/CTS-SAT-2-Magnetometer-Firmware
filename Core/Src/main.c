@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -18,15 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "i2c.h"
-#include "usart.h"
-#include "usb_otg.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <string.h>
+#include "lis2mdl.h"
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,95 +42,27 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
+UART_HandleTypeDef hlpuart1;
 
 /* USER CODE BEGIN PV */
-
+LIS2MDL_Data mag;
+HAL_StatusTypeDef mag_status;
+char message[128];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_LPUART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
-void lis2mdl_run_fixed(void);
-
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* USER CODE BEGIN 0 */
-
-
-/* USER CODE BEGIN 0 */
-// ---- LIS2MDL WHO_AM_I smoke test ----
-// Uses I2C1 on PB9=SDA (D14) / PB8=SCL (D15) and LPUART1 for prints.
-
-static void uart_print(const char *s) {
-  HAL_UART_Transmit(&hlpuart1, (uint8_t*)s, (uint16_t)strlen(s), HAL_MAX_DELAY);
-}
-
-static void who_test(void) {
-  const uint8_t cand[2] = {0x1E, 0x1F};   // SA1=GND -> 0x1E, SA1=VDD -> 0x1F
-  char line[128];
-
-  uart_print("\r\n--- LIS2MDL WHO probe (0x1E/0x1F) ---\r\n");
-  HAL_Delay(10); // power-up settle
-
-  uint8_t found_addr = 0;
-  uint8_t who_val    = 0;
-  HAL_StatusTypeDef st_rdy = HAL_ERROR, st_who = HAL_ERROR;
-
-  for (int i = 0; i < 2; ++i) {
-    uint8_t a = cand[i];
-
-    st_rdy = HAL_I2C_IsDeviceReady(&hi2c1, a<<1, 3, 10);
-    int n = snprintf(line, sizeof line, "Probe 0x%02X: %s\r\n",
-                     a, (st_rdy==HAL_OK) ? "ACK" : "NACK");
-    HAL_UART_Transmit(&hlpuart1, (uint8_t*)line, n, HAL_MAX_DELAY);
-
-    if (st_rdy != HAL_OK) continue;
-
-    who_val = 0;
-    st_who = HAL_I2C_Mem_Read(&hi2c1, a<<1, 0x4F, I2C_MEMADD_SIZE_8BIT,
-                              &who_val, 1, 50);
-    n = snprintf(line, sizeof line, "WHO @0x%02X: status=%ld val=0x%02X\r\n",
-                 a, (long)st_who, who_val);
-    HAL_UART_Transmit(&hlpuart1, (uint8_t*)line, n, HAL_MAX_DELAY);
-
-    if (st_who == HAL_OK && who_val == 0x40) {  // correct device ID
-      found_addr = a;
-      break;
-    }
-  }
-
-  uint32_t err  = HAL_I2C_GetError(&hi2c1);
-  uint32_t stat = HAL_I2C_GetState(&hi2c1);
-  int n = snprintf(line, sizeof line,
-                   "HAL state=0x%02lX err=0x%08lX\r\n", stat, err);
-  HAL_UART_Transmit(&hlpuart1, (uint8_t*)line, n, HAL_MAX_DELAY);
-
-  if (found_addr) {
-    n = snprintf(line, sizeof line,
-                 "RESULT: OK  addr=0x%02X  WHO=0x%02X\r\n",
-                 found_addr, who_val);
-    HAL_UART_Transmit(&hlpuart1, (uint8_t*)line, n, HAL_MAX_DELAY);
-  } else if (st_rdy != HAL_OK) {
-    uart_print("RESULT: NACK at both 0x1E and 0x1F (check GND, power, CS, SDA/SCL)\r\n");
-  } else if (st_who != HAL_OK) {
-    uart_print("RESULT: ACKed address, but WHO read failed\r\n");
-  } else {
-    uart_print("RESULT: WHO returned unexpected value (not 0x40)\r\n");
-  }
-
-  // Hold so you can read the message
-  while (1) { HAL_Delay(1000); }
-}
-
-
-/* USER CODE BEGIN 0 */
-
-
-/* USER CODE END 0 */
 
 /* USER CODE END 0 */
 
@@ -166,25 +95,61 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_LPUART1_UART_Init();
-  //MX_USART3_UART_Init();
-  //MX_USB_OTG_FS_PCD_Init();
   MX_I2C1_Init();
- // MX_I2C2_Init();
-  who_test();
+  MX_LPUART1_UART_Init();
+  /* USER CODE BEGIN 2 */
+  const char *startup = "Starting LIS2MDL...\r\n";
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)startup,
+                    (uint16_t)strlen(startup), 100);
 
+  mag_status = LIS2MDL_Init(&hi2c1);
 
+  if (mag_status != HAL_OK)
+  {
+      const char *error =
+          "Sensor init failed. Check VIN, GND, SCL and SDA.\r\n";
+
+      HAL_UART_Transmit(&hlpuart1, (uint8_t *)error,
+                        (uint16_t)strlen(error), 100);
+
+      Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
+    mag_status = LIS2MDL_Read(&hi2c1, &mag);
+
+    if (mag_status == HAL_OK)
+    {
+        /* Output in nanotesla: 1000 nT = 1 microtesla.
+          Integer formatting avoids printf float configuration. */
+        snprintf(message, sizeof(message),
+                "X=%ld nT, Y=%ld nT, Z=%ld nT\r\n",
+                (long)mag.x_raw * 150L,
+                (long)mag.y_raw * 150L,
+                (long)mag.z_raw * 150L);
+
+        HAL_UART_Transmit(&hlpuart1, (uint8_t *)message,
+                          (uint16_t)strlen(message), 100);
+    }
+    else if (mag_status != HAL_BUSY)
+    {
+        const char *error = "I2C read failed\r\n";
+
+        HAL_UART_Transmit(&hlpuart1, (uint8_t *)error,
+                          (uint16_t)strlen(error), 100);
+
+        HAL_Delay(500);
+    }
+
+    /* HAL_BUSY simply means the next measurement is not ready. */
+    HAL_Delay(10);
+    
   }
   /* USER CODE END 3 */
 }
@@ -200,7 +165,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST) != HAL_OK)
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -208,17 +173,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 2;
-  RCC_OscInitStruct.PLL.PLLN = 30;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -228,19 +187,135 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
-/* USER CODE BEGIN 4 */
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
 
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00100D14;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief LPUART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPUART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
+  hlpuart1.Instance = LPUART1;
+  hlpuart1.Init.BaudRate = 115200;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
+  hlpuart1.Init.StopBits = UART_STOPBITS_1;
+  hlpuart1.Init.Parity = UART_PARITY_NONE;
+  hlpuart1.Init.Mode = UART_MODE_TX_RX;
+  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  hlpuart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  hlpuart1.FifoMode = UART_FIFOMODE_DISABLE;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&hlpuart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&hlpuart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+
+  /* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOG_CLK_ENABLE();
+  HAL_PWREx_EnableVddIO2();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
 
